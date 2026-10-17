@@ -161,12 +161,12 @@ class CaveExplorer(Node):
         # === ASSIGNMENT 3 ADDITIONS: CONNECT PERCEPTION MODULES ===
         # IMPORT ONLY WHEN ENABLED TO KEEP THE ORIGINAL STARTER INTACT
         if self.use_perception2_:
-            from cave_explorer.perception2 import ColourShapeDetector
+            from cave_explorer.perception2_detector import ColourShapeDetector
             self.colour_detector_ = ColourShapeDetector()
 
             # PERCEPTION 3 MATCHES RGB DETECTIONS WITH DEPTH AND MAP TF
             if self.use_perception3_:
-                from cave_explorer.perception3 import Perception3
+                from cave_explorer.perception3_localisation import Perception3
                 self.perception3_ = Perception3(self)
 
             self.get_logger().info('Assignment 3 colour detection enabled')

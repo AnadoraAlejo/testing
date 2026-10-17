@@ -9,7 +9,7 @@
 import math
 import unittest
 import numpy as np
-from cave_explorer.advanced2_geometry import GeometryAnalyser
+from cave_explorer.advanced2a import GeometryAnalyser
 from cave_explorer.perception2_detector import ColourShapeDetector
 import cv2
 

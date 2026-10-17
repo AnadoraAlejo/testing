@@ -94,3 +94,126 @@ class GeometryAnalyser:
 # CAVE OCCUPANCY GRID
 
     def analyse(self, data, width, height, resolution, origin, robot_xy):
+        # VALIDATE MAP DIMENSIONS AND GRID DATA
+        if resolution <= 0 or width < 3 or height < 3 or len(data) != width * height:
+            raise ValueError('Invalid occupancy grid dimensions/data/resolution')
+
+        # CONVERT OCCUPANCY DATA INTO A TWO DIMENSIONAL GRID
+        grid_values = np.asarray(data, dtype=np.int16)
+        grid = grid_values.reshape(height, width)
+
+        # IDENTIFY FREE CELLS (0 TO 29), EXCLUDING UNKNOWN AND OCCUPIED CELLS
+        known = grid >= 0
+        low_occupancy = grid < 30
+        free = known & low_occupancy
+
+        # ADD A BORDER SO THE OUTSIDE OF THE MAP COUNTS AS BLOCKED
+        padded = np.pad(free.astype(np.uint8), 1)
+
+        # CALCULATE DISTANCE FROM EACH FREE CELL TO NEAREST BLOCKED CELL
+        distances = cv2.distanceTransform(padded, cv2.DIST_L2, 5)
+        clearance_cells = distances[1:-1, 1:-1]
+        clearance = clearance_cells * resolution
+
+        # KEEP ONLY FREE CELLS WITH SUFFICIENT ROBOT CLEARANCE
+        enough_clearance = clearance >= self.min_clearance
+        safe = free & enough_clearance
+
+        # CONVERT ROBOT MAP COORDINATES INTO GRID COORDINATES
+        ox = origin[0]
+        oy = origin[1]
+        yaw = origin[2]
+        dx = robot_xy[0] - ox
+        dy = robot_xy[1] - oy
+
+        robot_grid_x = math.cos(yaw) * dx + math.sin(yaw) * dy
+        robot_grid_y = -math.sin(yaw) * dx + math.cos(yaw) * dy
+        col = int(math.floor(robot_grid_x / resolution))
+        row = int(math.floor(robot_grid_y / resolution))
+
+        # FIND THE NEAREST SAFE CELL TO THE ROBOT
+        nearest = self._nearby_component(safe, col, row)
+        reachable = np.zeros_like(free, dtype=bool)
+
+        # DO NOT CHOOSE AN UNRELATED SAFE REGION FAR FROM THE ROBOT
+        if nearest is None:
+            return {'widest': None, 'bottleneck': None, 'clearance': clearance, 'reachable': reachable}
+        nearest_distance = math.hypot(nearest[0] - col, nearest[1] - row) * resolution
+        if nearest_distance > 1.5:
+            return {'widest': None, 'bottleneck': None, 'clearance': clearance, 'reachable': reachable}
+
+        # FIND THE CONNECTED SAFE COMPONENT CONTAINING THE ROBOT
+        count, component = cv2.connectedComponents(safe.astype(np.uint8), connectivity=8)
+        label = component[nearest[1], nearest[0]]
+        if label == 0:
+            return {'widest': None, 'bottleneck': None, 'clearance': clearance, 'reachable': reachable}
+        reachable = component == label
+
+        # FIND THE REACHABLE CELL WITH THE GREATEST CLEARANCE
+        positions = np.nonzero(reachable)
+        ys = positions[0]
+        xs = positions[1]
+        reachable_clearance = clearance[ys, xs]
+        top = int(np.argmax(reachable_clearance))
+        wr = int(ys[top])
+        wc = int(xs[top])
+        wx, wy = self.transform(wc, wr, resolution, origin)
+        widest = Feature(wx, wy, float(clearance[wr, wc]), wc, wr)
+
+        # FIND CENTRELINE CANDIDATES USING LOCAL CLEARANCE PEAKS
+        k = max(3, int(round(1.0 / resolution)) | 1)
+        clearance_float = clearance.astype(np.float32)
+        horizontal_kernel = np.ones((1, k), np.uint8)
+        vertical_kernel = np.ones((k, 1), np.uint8)
+        horizontal = cv2.dilate(clearance_float, horizontal_kernel)
+        vertical = cv2.dilate(clearance_float, vertical_kernel)
+        tol = 0.25 * resolution
+        ridge_horizontal = clearance >= horizontal - tol
+        ridge_vertical = clearance >= vertical - tol
+        ridge = ridge_horizontal | ridge_vertical
+
+        # ONLY KEEP REACHABLE NARROWER REGIONS AS BOTTLENECK CANDIDATES
+        upper = min(self.max_bottleneck, widest.clearance_m * 0.80)
+        valid = reachable & ridge
+        valid &= clearance >= self.min_clearance
+        valid &= clearance <= upper
+
+        # EXCLUDE FRONTIERS NEAR UNKNOWN MAP CELLS
+        known_mask = (grid >= 0).astype(np.uint8)
+        known_kernel = np.ones((5, 5), np.uint8)
+        known_near = cv2.erode(known_mask, known_kernel) > 0
+        valid &= known_near
+
+        # SORT CANDIDATES FROM NARROWEST TO WIDEST
+        candidates = np.argwhere(valid)
+        if len(candidates):
+            candidate_clearance = clearance[candidates[:, 0], candidates[:, 1]]
+            ordering = np.argsort(candidate_clearance)
+            candidates = candidates[ordering]
+
+        # CHECK FOR SAFE PASSAGE ON BOTH SIDES OF THE CANDIDATE
+        step = max(2, int(round(1.5 / resolution)))
+        bottleneck = None
+        for r, c in candidates[:4000]:
+            along_x = c >= step and c + step < width and reachable[r, c-step] and reachable[r, c+step]
+            along_y = r >= step and r + step < height and reachable[r-step, c] and reachable[r+step, c]
+            if not (along_x or along_y):
+                continue
+
+            # CANDIDATE SHOULD BE A LOCAL MINIMUM ALONG A TRAVEL DIRECTION
+            if along_x and (clearance[r, c] <= clearance[r, c-step] + tol and
+                            clearance[r, c] <= clearance[r, c+step] + tol):
+                pass
+            elif along_y and (clearance[r, c] <= clearance[r-step, c] + tol and
+                              clearance[r, c] <= clearance[r+step, c] + tol):
+                pass
+            else:
+                continue
+
+            # SAVE THE FIRST SUITABLE BOTTLENECK CANDIDATE
+            bx, by = self.transform(int(c), int(r), resolution, origin)
+            bottleneck = Feature(bx, by, float(clearance[r, c]), int(c), int(r))
+            break
+
+        return {'widest': widest, 'bottleneck': bottleneck,
+                'clearance': clearance, 'reachable': reachable}
