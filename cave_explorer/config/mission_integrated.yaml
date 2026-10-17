@@ -1,0 +1,33 @@
+# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
+# Source branch / provenance: LOCAL INTEGRATION — not from a GitHub branch
+# GitHub commit account / updater: ChatGPT-assisted integration; adopted/tested by user locally
+# Pinned commit SHA: none — new local integration
+# Integration notes: New unified mission parameters, chosen classes and geometry parameters.
+# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
+# === END ASSIGNMENT 3 PROVENANCE ===
+cave_mission:
+  ros__parameters:
+    use_sim_time: true
+    p3_sync_tolerance: 0.20
+    p3_pending_timeout: 6.0
+    chosen_types: ['blue_mushrooms', 'green_alien', 'white_sphere']
+    planning_enabled: true
+    degradation: none
+    severity: 0
+    use_improved: false
+    lost_timeout: 8.0
+    approach_timeout: 45.0
+    standoff: 2.0
+    output_directory: '~/cave_results'
+dataset_collector:
+  ros__parameters:
+    use_sim_time: true
+    dataset_directory: '~/cave_artefact_dataset'
+    dataset_label: negative
+cave_geometry:
+  ros__parameters:
+    use_sim_time: true
+    update_period_s: 2.0
+    minimum_clearance_m: 0.75
+    maximum_bottleneck_clearance_m: 3.0
+    results_directory: '~/cave_results/geometry'
