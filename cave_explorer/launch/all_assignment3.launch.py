@@ -1,11 +1,3 @@
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: LOCAL INTEGRATION — not from a GitHub branch
-# GitHub commit account / updater: ChatGPT-assisted integration; adopted/tested by user locally
-# Pinned commit SHA: none — new local integration
-# Integration notes: One-terminal staged Gazebo/SLAM/Nav2/mission launcher created during subsequent
-# ChatGPT-guided troubleshooting; NOT in original integration ZIP.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 import os
 
 from ament_index_python.packages import get_package_share_directory

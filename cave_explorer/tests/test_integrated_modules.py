@@ -1,10 +1,3 @@
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: LOCAL INTEGRATION — not from a GitHub branch
-# GitHub commit account / updater: ChatGPT-assisted integration; adopted/tested by user locally
-# Pinned commit SHA: none — new local integration
-# Integration notes: New synthetic tests for Perception 2 and Advanced 2; no live Gazebo/Nav2 test.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 """Offline tests for the added Advanced2 geometry and Perception2 detector."""
 import math
 import unittest

@@ -1,12 +1,3 @@
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: main
-# GitHub commit account / updater: AnadoraAlejo (repository upload/commit, not necessarily original
-# code author)
-# Pinned commit SHA: c4b451e2f4b8740595f9b820ee6fef4a7b6fb6ee
-# Integration notes: Legacy autonomous launcher inherited from starter; do NOT run with integrated
-# mission.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 
 import launch_ros.actions
 from launch import LaunchDescription

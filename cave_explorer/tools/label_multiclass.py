@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: LOCAL INTEGRATION — not from a GitHub branch
-# GitHub commit account / updater: ChatGPT-assisted integration; adopted/tested by user locally
-# Pinned commit SHA: none — new local integration
-# Integration notes: New multiclass bounding-box labelling helper for assessment metrics.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 """Create reviewed multi-class annotation manifest for evaluator.
 
 Draw boxes on each image, then type a class label for each box in terminal.

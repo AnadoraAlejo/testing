@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: Planning3-and-advance1
-# GitHub commit account / updater: Charanyasuresh
-# Pinned commit SHA: 8524b0ff53e38db4be91d5e2800f0293672f68f1
-# Integration notes: Teammate image-labelling support script.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 """Human box annotation for the supplied stop-sign model (desktop OpenCV)."""
 import argparse
 import json

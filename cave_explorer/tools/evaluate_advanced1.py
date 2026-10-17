@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: Planning3-and-advance1
-# GitHub commit account / updater: Charanyasuresh
-# Pinned commit SHA: 8524b0ff53e38db4be91d5e2800f0293672f68f1
-# Integration notes: Teammate evaluation script, locally patched by installer to use
-# CompositeDetector.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 """Paired evaluation on human-labelled held-out images; no ROS needed."""
 import argparse
 import csv

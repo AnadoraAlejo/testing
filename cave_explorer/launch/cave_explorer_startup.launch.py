@@ -1,12 +1,3 @@
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: main
-# GitHub commit account / updater: AnadoraAlejo (repository upload/commit, not necessarily original
-# code author)
-# Pinned commit SHA: c4b451e2f4b8740595f9b820ee6fef4a7b6fb6ee
-# Integration notes: Starter Gazebo, robot model, bridge, and RViz launcher copied from local
-# planning1 source.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -77,7 +68,7 @@ def generate_launch_description():
     gazebo = IncludeLaunchDescription(
         PathJoinSubstitution([FindPackageShare('ros_ign_gazebo'), 'launch', 'ign_gazebo.launch.py']),
         launch_arguments={
-            'ign_args': [world_path, ' -r']}.items()
+            'ign_args': [world_path, ' -r --render-engine ogre']}.items()
     )
 
     # Spawn robot in Gazebo

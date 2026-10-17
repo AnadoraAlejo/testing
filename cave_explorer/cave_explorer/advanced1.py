@@ -1,11 +1,3 @@
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: Planning3-and-advance1
-# GitHub commit account / updater: Charanyasuresh
-# Pinned commit SHA: 8524b0ff53e38db4be91d5e2800f0293672f68f1
-# Integration notes: Low-light/noise degradation, restoration, baseline detection and metrics
-# primitives.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 """Advanced 1: controlled degradations and a candidate robust pipeline.
 
 All boxes use (x, y, width, height) in original image coordinates.

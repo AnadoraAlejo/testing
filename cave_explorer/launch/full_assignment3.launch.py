@@ -1,11 +1,3 @@
-# === ASSIGNMENT 3 PROVENANCE (LOCAL ANNOTATION) ===
-# Source branch / provenance: LOCAL INTEGRATION — not from a GitHub branch
-# GitHub commit account / updater: ChatGPT-assisted integration; adopted/tested by user locally
-# Pinned commit SHA: none — new local integration
-# Integration notes: New launch file for integrated mission, dataset collector, and cave geometry
-# nodes.
-# Attribution caveat: GitHub account != original author of every line; disclose AI assistance.
-# === END ASSIGNMENT 3 PROVENANCE ===
 """Start integrated autonomy, dataset collector, and geometry node.
 
 Start cave_explorer_startup.launch.py and cave_explorer_navigation.launch.py
