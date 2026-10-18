@@ -9,7 +9,7 @@ import numpy as np
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import Image
 from visualization_msgs.msg import Marker, MarkerArray
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.time import Time
 from tf2_ros import TransformException
 from cave_explorer.perception3_geometry import depth_point, transform_point, ArtefactTracks
@@ -18,22 +18,34 @@ from cave_explorer.perception3_geometry import depth_point, transform_point, Art
 class Perception3:
     def __init__(self, node):
         self.node = node
-        self.depths = deque(maxlen=12)
-        self.pending = deque(maxlen=12)
+        self.depths = deque(maxlen=200)
+        self.pending = deque(maxlen=120)
         self.tracker = ArtefactTracks()
         self.last_stamp = None
+        self.last_processed_stamp = None
+        self.last_clock = None
         self.last_warning = {}
         node.declare_parameter('p3_merge_radius', 0.75)
-        node.declare_parameter('p3_sync_tolerance', 0.08)
-        node.declare_parameter('p3_pending_timeout', 6.0) # AA ADDED 6 SECONDS TO ALLOW MORE TIME FOR DEPTH IMAGE AND TF DATA TO BE RECEIVED.
+        node.declare_parameter('p3_sync_tolerance', 0.50)
+        node.declare_parameter('p3_pending_timeout', 6.0)  # ROS/simulation seconds
+        node.declare_parameter('p3_pending_wall_timeout', 600.0)  # stalled-clock watchdog
         node.declare_parameter('p3_hfov', 2.0944)
         self.tracker.radius = float(node.get_parameter('p3_merge_radius').value)
         if self.tracker.radius <= 0:
             raise ValueError('p3_merge_radius must be positive')
+        depth_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=200,
+            durability=DurabilityPolicy.VOLATILE)
         self.sub = node.create_subscription(Image, 'camera/depth/image', self.depth_callback,
-                                            qos_profile_sensor_data)
-        self.timer = node.create_timer(0.05, self.process)
+                                            depth_qos)
+        self.timer = node.create_timer(0.10, self.process)
         self.marker_timer = node.create_timer(1.0, self.publish_markers)
+        node.get_logger().info(
+            'Perception 3 team revision: aligned 480x320; depth history=200; '
+            'depth subscription queue=200; exact image-time TF; '
+            f"tolerance={node.get_parameter('p3_sync_tolerance').value}s")
 
     def warn(self, key, message):
         now = time.monotonic()
@@ -63,16 +75,17 @@ class Perception3:
             self.warn('conversion', str(error))
             return
         stamp = self.stamp(msg)
-        if self.depths and stamp < self.depths[-1][0]:
-            self.reset()
-        self.depths.append((stamp, depth))
-        self.process()
+        self.check_clock()
+        # Late/out-of-order sensor delivery is not a simulation clock reset.
+        frames = [(t, d) for t, d in self.depths if t != stamp]
+        frames.append((stamp, depth))
+        frames.sort(key=lambda pair: pair[0])
+        self.depths = deque(frames[-200:], maxlen=200)
 
     def submit(self, image_msg, detections):
         stamp = self.stamp(image_msg)
-        if self.last_stamp is not None and stamp < self.last_stamp:
-            self.reset()
-        if self.last_stamp == stamp:
+        self.check_clock()
+        if self.last_stamp is not None and stamp <= self.last_stamp:
             return
         self.last_stamp = stamp
         if not detections:
@@ -80,45 +93,86 @@ class Perception3:
         if image_msg.header.frame_id != 'camera_link':
             self.warn('rgb_frame', 'RGB must come from supplied Gazebo camera_link sensor')
             return
-        self.pending.append((image_msg.header, image_msg.height, image_msg.width,
-                             list(detections), time.monotonic()))
-        self.process()
+        if len(self.pending) == self.pending.maxlen:
+            self.warn('queue', 'Pending queue full; dropping oldest observation')
+        self.pending.append(dict(
+            header=image_msg.header, height=image_msg.height, width=image_msg.width,
+            detections=list(detections), received_wall=time.monotonic(),
+            received_ros=self.node.get_clock().now().nanoseconds/1e9,
+            depth=None, reason='No depth message received'))
 
     def reset(self):
         self.depths.clear()
         self.pending.clear()
         self.tracker = ArtefactTracks(self.tracker.radius)
         self.last_stamp = None
+        self.last_processed_stamp = None
+        self.last_clock = None
         self.node.artifact_locations_ = []
         self.publish_markers()
+
+    def check_clock(self):
+        now = self.node.get_clock().now().nanoseconds/1e9
+        if self.last_clock is not None and now < self.last_clock:
+            self.reset()
+        self.last_clock = now
+        return now
 
     def process(self):
         # Queue briefly: depth or TF may arrive just after RGB.
         radius = float(self.node.get_parameter('p3_merge_radius').value)
         if radius > 0:
             self.tracker.radius = radius
-        remaining = deque(maxlen=12)
+        remaining = deque(maxlen=self.pending.maxlen)
+        now_ros = self.check_clock()
         while self.pending:
             item = self.pending.popleft()
-            header, height, width, detections, received = item
+            header = item['header']
+            height, width = item['height'], item['width']
+            detections = item['detections']
             stamp = header.stamp.sec + header.stamp.nanosec*1e-9
-            if time.monotonic()-received > float(self.node.get_parameter('p3_pending_timeout').value): # AA CHANGED FROM 1.5 TO 6 SECONDS TO ALLOW MORE TIME FOR DEPTH IMAGE AND TF DATA TO BE RECEIVED.
-                self.warn('timeout', 'Skipped observation: matching depth or timestamped TF unavailable')
+            if self.last_processed_stamp is not None and stamp <= self.last_processed_stamp:
+                # Do not let an old delayed observation move track freshness backwards.
                 continue
-            if not self.depths:
-                remaining.append(item)
+            ros_age = now_ros-item['received_ros']
+            wall_age = time.monotonic()-item['received_wall']
+            if ros_age < 0:
+                self.reset()
+                return
+            if (ros_age > float(self.node.get_parameter('p3_pending_timeout').value)
+                    or wall_age > float(self.node.get_parameter('p3_pending_wall_timeout').value)):
+                self.warn('timeout', f"Skipped observation at {stamp:.3f}: {item['reason']}; "
+                          f"waited {ros_age:.2f}s ROS / {wall_age:.1f}s wall")
                 continue
-            ds, depth = min(self.depths, key=lambda pair: abs(pair[0]-stamp))
-            tolerance = float(self.node.get_parameter('p3_sync_tolerance').value)
-            if abs(ds-stamp) > tolerance:
-                remaining.append(item)
-                continue
-            if depth.shape != (height, width) or (height, width) != (480, 720):
-                self.warn('size', 'Expected aligned 720x480 RGB/depth; recalibrate for changed camera')
-                continue
+            # Retain the matched depth while waiting for timestamped TF. Otherwise
+            # it can disappear from the rolling depth buffer before TF catches up.
+            depth = item['depth']
+            if depth is None:
+                if not self.depths:
+                    item['reason'] = 'No accepted depth on /camera/depth/image'
+                    self.warn('depth_wait', item['reason'])
+                    remaining.append(item)
+                    continue
+                ds, depth = min(self.depths, key=lambda pair: abs(pair[0]-stamp))
+                tolerance = float(self.node.get_parameter('p3_sync_tolerance').value)
+                if abs(ds-stamp) > tolerance:
+                    item['reason'] = (f'RGB-depth mismatch: nearest delta={abs(ds-stamp):.3f}s '
+                                      f'exceeds tolerance={tolerance:.3f}s; RGB={stamp:.3f}; '
+                                      f'nearest_depth={ds:.3f}; depth_minus_rgb={ds-stamp:+.3f}s; '
+                                      f'buffer=[{self.depths[0][0]:.3f}, {self.depths[-1][0]:.3f}]; '
+                                      f'frames={len(self.depths)}; RGB_age={now_ros-stamp:.3f}s')
+                    self.warn('sync_wait', item['reason'])
+                    remaining.append(item)
+                    continue
+                if depth.shape != (height, width) or (height, width) != (320, 480):
+                    self.warn('size', 'Expected aligned 480x320 RGB/depth; recalibrate for changed camera')
+                    continue
+                item['depth'] = depth
             try:
                 tf = self.node.tf_buffer.lookup_transform('map', 'camera_link', Time.from_msg(header.stamp))
-            except TransformException:
+            except TransformException as error:
+                item['reason'] = f'TF map <- camera_link at {stamp:.3f}: {error}'
+                self.warn('tf_wait', item['reason'])
                 remaining.append(item)
                 continue
             trans, rot = tf.transform.translation, tf.transform.rotation
@@ -132,6 +186,11 @@ class Perception3:
                 point = transform_point(camera_point, np.array([trans.x, trans.y, trans.z]),
                                         [rot.x, rot.y, rot.z, rot.w])
                 observations.append((str(label), point))
+            self.last_processed_stamp = stamp
+            if not observations:
+                self.warn('depth_geometry',
+                          'RGB/depth and TF matched, but no valid central-patch depth; '
+                          'check depth validity and whether boxes cover the artefact')
             tracks = self.tracker.update(observations, stamp)
             self.node.artifact_locations_ = [Point(x=float(t['point'][0]), y=float(t['point'][1]),
                                                   z=float(t['point'][2])) for t in tracks]

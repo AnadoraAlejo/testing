@@ -8,8 +8,9 @@
 cave_mission:
   ros__parameters:
     use_sim_time: true
-    p3_sync_tolerance: 0.20
+    p3_sync_tolerance: 0.50
     p3_pending_timeout: 6.0
+    p3_pending_wall_timeout: 600.0
     chosen_types: ['blue_mushrooms', 'green_alien', 'white_sphere']
     planning_enabled: true
     degradation: none
